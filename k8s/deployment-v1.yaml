@@ -1,0 +1,85 @@
+apiVersion: apps/v1 # for versions before 1.9.0 use apps/v1beta2
+kind: Deployment
+metadata:
+  labels:
+    app: zero-downtime-rollingupdate
+    version: v1
+  name: zero-downtime-rollingupdate-v1 # Must match image name for porter2k8s logic
+spec:
+  selector:
+    matchLabels:
+      app: zero-downtime-rollingupdate
+      version: v1
+  replicas: 1 # tells deployment to run 1 pods matching the template initially, before the pod autoscaler takes over.
+  template: # create pods using pod definition in this template
+    metadata:
+      labels:
+        app: zero-downtime-rollingupdate
+        version: v1
+      annotations:
+        # traffic.sidecar.istio.io/excludeOutboundIPRanges: 0.0.0.0/0 # Bypass Istio sidecar. # Bypass sidecar outbound
+        # If required: 
+        # iam.amazonaws.com/role: arn:aws:iam::{{.ACCOUNT}}:role/servicename-{{.ENVIRONMENT}}-{{.REGION}}
+    spec:
+      terminationGracePeriodSeconds: 32
+      containers:
+      - name: zero-downtime-rollingupdate
+        image: 172.16.140.180:5000/zero-downtime-rollingupdate:v1 # Registry (up to first '/') is overriden by the cluster.
+        imagePullPolicy: Always
+        resources:
+          requests:
+            cpu: 0.75
+            memory: 128M
+          limits:
+            cpu: 1
+            memory: 256M
+        ports:
+        - containerPort: 8080
+        lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/bash", "-c", "sleep 30"]
+        livenessProbe:
+          exec:
+            command:
+              - /bin/sh
+              - -c
+              #- curl -m 2 localhost:8080/k8s/health | grep OK
+              - curl -m 2 localhost:8080/ping | grep pong  
+          initialDelaySeconds: 90
+          timeoutSeconds: 3
+          periodSeconds: 5
+        readinessProbe:
+          exec:
+            command:
+              - /bin/sh
+              - -c
+              #- curl -m 2 localhost:8080/k8s/health | grep OK
+              - curl -m 2 localhost:8080/ping | grep pong
+          initialDelaySeconds: 30
+          timeoutSeconds: 3
+          periodSeconds: 5
+          failureThreshold: 3
+        envFrom:
+         - configMapRef:
+             name: cluster
+---
+apiVersion: autoscaling/v2beta1
+kind: HorizontalPodAutoscaler
+metadata:
+  name: zero-downtime-rollingupdate-v1
+  labels:
+    app: zero-downtime-rollingupdate
+    version: v1
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: zero-downtime-rollingupdate-v1
+  minReplicas: 1
+  maxReplicas: 2
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      targetAverageUtilization: 70

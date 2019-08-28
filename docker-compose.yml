@@ -1,0 +1,15 @@
+# By default, you MUST run `make build` first before running `docker-compose up`
+# Passing in `--build` or just simply running `docker-compose up` is not sufficient to
+# build the container.
+version: '2'
+services:
+  web:
+    build: .
+    ports:
+     - "8080:8080"
+     - "4000:4000"
+    environment:
+     - ENVIRONMENT_NAME=local
+     - REGION_NAME=local
+#     Uncomment this for enabling remote debugging option
+#     - JVM_OPTIONS=-Xdebug -Xrunjdwp:transport=dt_socket,server=y,address=4000

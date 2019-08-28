@@ -1,0 +1,18 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: zero-downtime-rollingupdate
+spec:
+  hosts:
+  - "*" # Domain (everything after the first '.') will be overwritten on deployment.
+  gateways:
+  - demo-gateway # Gateway will be overwritten on deployment.
+  http:
+  - route:
+    - destination:
+        host: zero-downtime-rollingupdate
+        port:
+          number: 8080
+    retries:
+      attempts: 3
+      perTryTimeout: 5s #This is the timeout for receiving response headers on retry. Make sure this makes sense for your service

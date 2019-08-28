@@ -1,0 +1,73 @@
+apiVersion: apps/v1 # for versions before 1.9.0 use apps/v1beta2
+kind: Deployment
+metadata:
+  name: zero-downtime-rollingupdate
+spec:
+  selector:
+    matchLabels:
+      app: zero-downtime-rollingupdate
+  replicas: 2 # tells deployment to run 2 pods matching the template initially, before the pod autoscaler takes over.
+  template: # create pods using pod definition in this template
+    metadata:
+      labels:
+        app: zero-downtime-rollingupdate
+    spec:
+      terminationGracePeriodSeconds: 32
+      containers:
+      - name: zero-downtime-rollingupdate
+        image: 172.16.140.180:5000/zero-downtime-rollingupdate:v1 # Registry (up to first '/') is overriden by the cluster.
+        imagePullPolicy: Always
+        resources:
+          requests:
+            cpu: 0.75
+            memory: 256M
+          limits:
+            cpu: 1
+            memory: 300M
+        ports:
+        - containerPort: 8080
+        lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/bash", "-c", "sleep 30"]
+        livenessProbe:
+          exec:
+            command:
+              - /bin/sh
+              - -c
+              - curl -m 2 localhost:8080/ping | grep pong
+          initialDelaySeconds: 90
+          timeoutSeconds: 3
+          periodSeconds: 5
+        readinessProbe:
+          exec:
+            command:
+              - /bin/sh
+              - -c
+              - curl -m 2 localhost:8080/ping | grep pong
+          initialDelaySeconds: 30
+          timeoutSeconds: 3
+          periodSeconds: 5
+          failureThreshold: 3
+        envFrom:
+         - configMapRef:
+             name: cluster
+---
+apiVersion: autoscaling/v2beta1
+kind: HorizontalPodAutoscaler
+metadata:
+  name: zero-downtime-rollingupdate
+  labels:
+    app: zero-downtime-rollingupdate
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: zero-downtime-rollingupdate
+  minReplicas: 2 # Don't set this value lower than 2. Just in case, a value less than 2 will be overridden to 2 in prod.
+  maxReplicas: 2
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      targetAverageUtilization: 70

@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cluster
+  namespace: default
+data:
+  ENVIRONMENT_NAME: local
+  REGION_NAME: local
+  S6_KILL_GRACETIME: "20000"
