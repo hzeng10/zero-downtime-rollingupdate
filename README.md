@@ -158,6 +158,10 @@ Start Fortio server with different port
 fortio server -http-port 9090
 fortio server -http-port 192.168.230.217:8090
 ```
+Start Fortio load test with QPS and duration
+```
+fortio load -qps 20 -t 600s http://192.168.99.101:8080/k8s/demo
+```
 ### Deploy zero-downtime-rollingupdate Spring Boot application
 Enable Istio injection for default name space. 
 ```
@@ -212,7 +216,7 @@ Wait for 3 minutes, change the weight accordingly, like change v1 as 50, change 
 ```
 kubectl edit -f ~/zero-downtime-rollingupdate/k8s/istio-virtual-service-v1-v2.yaml
 ```
-Wait for 3 minutes, change the weight like change v1 as 0, and v2 as 100 to update the service as v2 fully.
+Wait for 3 minutes, change the weight like change v1 as 0, and v2 as 100 to update the service as v2 finally.
 ```
 kubectl edit -f ~/zero-downtime-rollingupdate/k8s/istio-virtual-service-v1-v2.yaml
 ```
