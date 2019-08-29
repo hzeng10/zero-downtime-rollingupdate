@@ -183,3 +183,44 @@ Verify the application can be accessed via Istio gateway(Assume the IP is:192.16
 ```
 curl -v http://192.168.99.101:31380/k8s/demo
 ```
+### Implement zero down time deployment
+Delete the previous deployment/virtual service to avoid conflict
+```
+kubectl delete deployment zero-downtime-rollingupdate
+kubectl delete virtualservice zero-downtime-rollingupdate
+```
+Create v1/v2 deployment
+```
+kubectl apply -f ~/zero-downtime-rollingupdate/k8s/deployment-v1.yaml
+kubectl apply -f ~/zero-downtime-rollingupdate/k8s/deployment-v2.yaml
+```
+Create destination rule
+```
+kubectl apply -f ~/zero-downtime-rollingupdate/k8s/destination-rule-v1-v2.yaml
+```
+Create virtual service to include both v1/v2, set v1 as 90% weight, v2 as 10% weight
+```
+kubectl apply -f ~/zero-downtime-rollingupdate/k8s/istio-virtual-service-v1-v2.yaml
+```
+Open two terminal, and use Fortio to create HTTP traffic to both /k8s/demo and /k8s/longTask
+In this loading test, it will create 20/10 QPS with 10 minutes duration to /k8s/demo and to /k8s/longTask accordingly
+```
+fortio load -qps 20 -t 600s http://192.168.99.101:31380/k8s/demo
+fortio load -qps 20 -t 600s http://192.168.99.101:31380/k8s/longTask
+```
+Wait for 3 minutes, change the weight accordingly, like change v1 as 50, change v2 as 500.
+```
+kubectl edit -f ~/zero-downtime-rollingupdate/k8s/istio-virtual-service-v1-v2.yaml
+```
+Wait for 3 minutes, change the weight like change v1 as 0, and v2 as 100 to update the service as v2 fully.
+```
+kubectl edit -f ~/zero-downtime-rollingupdate/k8s/istio-virtual-service-v1-v2.yaml
+```
+Wait for the load test to complete, and verify the result from Fortio output. Example of the output;
+```
+Sockets used: 4 (for perfect keepalive, would be 4)
+Code 200 : 3000 (100.0 %)
+Response Header Sizes : count 3000 avg 222.748 +/- 0.4588 min 222 max 224 sum 668244
+Response Body/Total Sizes : count 3000 avg 231.748 +/- 0.4588 min 231 max 233 sum 695244
+All done 3000 calls (plus 4 warmup) 31.286 ms avg, 10.0 qps
+```
