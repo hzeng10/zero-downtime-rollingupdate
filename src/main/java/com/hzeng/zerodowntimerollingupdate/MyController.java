@@ -6,6 +6,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.ArrayList;
@@ -33,6 +34,8 @@ public class MyController {
     private final static String OK_RESPONSE = "OK\r\n";
     private final static String OK_RESPONSE_V1 = "OK - V1\r\n";
     private final static String OK_RESPONSE_V2 = "OK - V2\r\n";
+    private AtomicInteger retryCounter = new AtomicInteger(0);
+    private AtomicInteger longRetryCounter = new AtomicInteger(0);
 
     @GetMapping("/ping")
     public String ping() {
@@ -108,6 +111,50 @@ public class MyController {
         FullGCTask task = new FullGCTask();
         executor.execute(task);
         return OK_RESPONSE;
+    }
+
+    @GetMapping("/k8s/retry")
+    public ResponseEntity<String> retry() {
+        int counter = retryCounter.incrementAndGet();
+        return doRetry(counter, false, 0);
+    }
+
+
+    @GetMapping("/k8s/delayRetry")
+    public ResponseEntity<String> retryWithDelay(@RequestParam(required = false, name = "seconds") String seconds) {
+        int counter = longRetryCounter.incrementAndGet();
+        String value = (seconds == null || seconds.isEmpty()) ? "5" : seconds;
+        return doRetry(counter, true, Integer.parseInt(value));
+    }
+
+    private ResponseEntity<String> doRetry(Integer counter, boolean delay, int seconds) {
+        if (delay) {
+            try {
+                if (seconds > 60) {
+                    seconds = 60;
+                } else if (seconds <= 0) {
+                    seconds = 5;
+                }
+                if (seconds > 0) {
+                    TimeUnit.MILLISECONDS.sleep(seconds * 1000 - 5);
+                }
+            } catch (InterruptedException e) {
+                logger.error("doRetry >> InterruptedException occurred! Ignore it.");
+            }
+        }
+        //retry 3 times
+        if (counter % 3 == 0) {
+            logger.info("retry >> The retry counter is : {}, Send HTTP 200 OK.", counter);
+            return ResponseEntity.status(HttpStatus.OK)
+                    .body("{\"status\": \"OK - V3\"}\r\n");
+        } else if (counter % 2 == 0) {
+            logger.info("retry >> The retry counter is : {}, Send HTTP 409 CONFLICT.", counter);
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body("{\"status\": \"CONFLICT - V3\"}\r\n");
+        }
+        logger.info("retry >> The retry counter is : {}, Send HTTP 503 SERVICE_UNAVAILABLE.", counter);
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body("{\"status\": \"SERVICE_UNAVAILABLE - V3\"}\r\n");
     }
 
     static class LongTask implements Callable<Integer> {
